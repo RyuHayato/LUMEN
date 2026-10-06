@@ -1,0 +1,7 @@
+# LUMEN builds inside the project directory.
+#
+# Keeps every Cargo artifact under ./target so the repository is
+# self-contained: no external build directory, no shared cache that
+# survives a move of the project. `target/` is git-ignored.
+[build]
+target-dir = "target"

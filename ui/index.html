@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>LUMEN</title>
+    <!-- First paint, before style.css has been fetched and parsed.
+         The native window already starts on this colour (backgroundColor in
+         tauri.conf.json, --ink here). Repeating it inline means the document
+         canvas is never white: not while the stylesheet is in flight, and not
+         at all if it fails to load. Keep this block to the root background and
+         nothing else — the real stylesheet owns every other rule. -->
+    <style>
+      html {
+        color-scheme: dark;
+        background: #0a0a12;
+      }
+
+      body {
+        margin: 0;
+        background: #0a0a12;
+      }
+    </style>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Welcome-flourish on first paint: a slow gradient word, then gone. -->
+    <!-- Keyboard shortcuts. Built from the same table the key handler uses, so
+         the help card can never describe something the app does not do. -->
+    <div class="shortcut-overlay" id="shortcut-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="shortcut-card">
+        <div class="shortcut-head">
+          <h2>Keyboard</h2>
+          <button class="btn-quiet" id="shortcut-close" type="button">Close</button>
+        </div>
+        <div class="shortcut-list" id="shortcut-list"></div>
+      </div>
+    </div>
+
+    <div class="welcome" id="welcome">
+      <div class="welcome-inner">
+        <p class="welcome-to">Welcome to</p>
+        <h1 class="welcome-word">LUMEN</h1>
+      </div>
+    </div>
+
+    <!-- ========================================================== the nave
+         Four atmosphere layers, none of them legible as an image. The GIF is
+         blurred to pure texture so type never sits on architecture; the light
+         layer carries the colour sampled from the playing album. -->
+    <div class="nave" aria-hidden="true">
+      <img id="gothic-bg" src="assets/Gothic_Banner.gif" alt="" />
+      <div class="nave-light"></div>
+      <div class="nave-vignette"></div>
+    </div>
+
+    <div class="app" id="app">
+      <!-- ============================================================ rail -->
+      <aside class="rail" id="sidebar" aria-label="Primary">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <circle class="bm-halo" cx="16" cy="16" r="13" />
+              <circle class="bm-ring" cx="16" cy="16" r="9.5" />
+              <circle class="bm-core" cx="16" cy="16" r="3.4" />
+            </svg>
+          </span>
+          <span class="wordmark">Lumen</span>
+        </div>
+
+        <nav class="nav" id="nav" aria-label="Sections">
+          <p class="nav-group">Collection</p>
+
+          <button class="nav-item is-active" data-view="library" aria-current="page">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 4.5h14M3 10h14M3 15.5h9" />
+            </svg>
+            <span class="nav-label">Library</span>
+          </button>
+
+          <button class="nav-item" data-view="artists">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="7" r="3.1" />
+              <path d="M4.2 16.5c.9-2.9 3.1-4.4 5.8-4.4s4.9 1.5 5.8 4.4" />
+            </svg>
+            <span class="nav-label">Artists</span>
+          </button>
+
+          <button class="nav-item" data-view="albums">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="10" r="7.2" />
+              <circle cx="10" cy="10" r="1.9" />
+            </svg>
+            <span class="nav-label">Albums</span>
+          </button>
+
+          <button class="nav-item" data-view="playlists">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 5h10M3 10h10M3 15h6M16 12.5v5M13.5 15h5" />
+            </svg>
+            <span class="nav-label">Playlists</span>
+          </button>
+
+          <p class="nav-group">You</p>
+
+          <button class="nav-item" data-view="favorites">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 16.4S3.3 12.6 3.3 7.9A3.6 3.6 0 0 1 10 6a3.6 3.6 0 0 1 6.7 1.9c0 4.7-6.7 8.5-6.7 8.5Z" />
+            </svg>
+            <span class="nav-label">Favorites</span>
+          </button>
+
+          <button class="nav-item" data-view="history">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3.4 8.1A7 7 0 1 1 3 10.9" />
+              <path d="M3.1 3.9v4.3h4.3" />
+              <path d="M10 6.6V10l2.7 1.7" />
+            </svg>
+            <span class="nav-label">History</span>
+          </button>
+        </nav>
+
+        <div class="rail-foot">
+          <button class="nav-item" data-view="settings">
+            <span class="nav-beam" aria-hidden="true"></span>
+            <svg class="nav-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 6.2h5.5M11.8 6.2H17M3 13.8h2.6M8.9 13.8H17" />
+              <circle cx="10.1" cy="6.2" r="1.8" />
+              <circle cx="7.2" cy="13.8" r="1.8" />
+            </svg>
+            <span class="nav-label">Settings</span>
+          </button>
+
+          <div class="rail-base">
+            <span class="rail-ornament" aria-hidden="true"></span>
+            <button
+              id="collapse-btn"
+              class="icon-btn"
+              type="button"
+              aria-pressed="false"
+              title="Collapse navigation"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M4 4.5h12v11H4zM8.4 4.5v11" />
+              </svg>
+              <span class="sr-only">Collapse navigation</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- =========================================================== stage -->
+      <main class="stage" id="content" tabindex="-1">
+        <header class="stage-head">
+          <div class="stage-titles">
+            <h1 id="view-title">Library</h1>
+            <p class="stage-sub" id="view-sub">Everything in your collection.</p>
+          </div>
+
+          <!-- Search is scoped to the Library: it filters the track ledger
+               under it, and is hidden everywhere else. -->
+          <div class="stage-search" id="search-slot">
+            <svg class="search-glyph" viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="9" cy="9" r="5.4" />
+              <path d="M13.2 13.2 17 17" />
+            </svg>
+            <input
+              id="search-input"
+              type="search"
+              placeholder="Search your library"
+              aria-label="Search tracks in your library"
+              autocomplete="off"
+            />
+          </div>
+        </header>
+
+        <div class="views" id="views">
+          <!-- ------------------------------------------------------ LIBRARY -->
+          <section class="view is-active" id="view-library" aria-labelledby="view-title">
+            <!-- Now-playing plate: the artwork is the light source, and the
+                 signal readout sits directly under the title because on this
+                 app the signal path is part of the music's identity. -->
+            <div class="plate">
+              <div class="plate-frame">
+                <img class="plate-bloom" id="now-bloom" alt="" aria-hidden="true" hidden />
+                <div class="plate-art">
+                  <img id="now-art" alt="" hidden />
+                  <div class="art-empty" id="now-art-empty" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none">
+                      <circle class="ae-halo" cx="32" cy="32" r="25" />
+                      <circle class="ae-ring" cx="32" cy="32" r="17" />
+                      <circle class="ae-core" cx="32" cy="32" r="5.5" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate-body">
+                <span class="eyebrow" id="now-eyebrow">Ready</span>
+                <h2 id="now-title">Nothing playing</h2>
+                <p class="plate-artist" id="now-artist"></p>
+                <p class="plate-meta" id="now-meta">Pick a track below to start listening.</p>
+
+                <div class="plate-actions">
+                  <button id="hero-play-btn" class="btn-primary" type="button">
+                    <svg class="btn-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                      <path id="hero-play-path" d="M4.5 3.2 12.5 8l-8 4.8z" />
+                    </svg>
+                    <span id="hero-play-label">Play</span>
+                  </button>
+                  <button id="hero-shuffle-btn" class="btn-quiet" type="button">
+                    <svg class="btn-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M2 4h2.6l6.8 8H14M2 12h2.6l2.2-2.6M9.8 5.6 11.4 4H14" />
+                      <path d="M12.2 2.2 14.2 4l-2 1.8M12.2 10.2 14.2 12l-2 1.8" />
+                    </svg>
+                    <span>Shuffle</span>
+                  </button>
+                </div>
+
+                <!-- The signal row. Lamps, not labels: this is the one place
+                     the app gets to show off, because a clean path is the
+                     entire reason it exists. -->
+                <div class="signal-row" id="now-readout" hidden>
+                  <span class="verdict" id="rd-verdict">
+                    <i class="verdict-lamp" aria-hidden="true"></i>
+                    <b id="rd-verdict-text">Bit-perfect</b>
+                  </span>
+                  <span class="gauge"><b id="rd-rate">—</b><em>rate</em></span>
+                  <span class="gauge"><b id="rd-chan">—</b><em>channels</em></span>
+                  <span class="gauge"><b id="rd-depth">—</b><em>encoding</em></span>
+                  <span class="gauge gauge-wide"><b id="rd-device">—</b><em>output</em></span>
+                </div>
+              </div>
+
+              <aside class="plate-rail" aria-labelledby="more-by-title" hidden>
+                <div class="rail-title">
+                  <h3 id="more-by-title">More by this artist</h3>
+                  <span class="fine dim" id="more-by-note"></span>
+                </div>
+                <ul class="more-list" id="more-by-list"></ul>
+              </aside>
+            </div>
+
+            <!-- Recently played, as album cards and playlist cards. Clicks open
+                 them directly: an album opens its track sheet, a playlist
+                 jumps to that collection. -->
+            <div class="ledger-head" id="recent-head">
+              <h2 id="recent-title">Recently Played</h2>
+              <div class="ledger-meta">
+                <span class="dim" id="recent-count"></span>
+                <span class="ledger-stats" id="library-stats"></span>
+              </div>
+            </div>
+
+            <div class="wall wall-albums" id="recent-grid"></div>
+
+            <div class="ledger-head" id="recent-playlists-head" hidden>
+              <h2>Your Playlists</h2>
+            </div>
+            <div class="wall wall-playlists" id="recent-playlist-grid"></div>
+
+            <!-- Every track in the library. The recently-played wall above is
+                 for jumping back in; this is the shelf you browse and play
+                 from, and it is what the search field filters. -->
+            <div class="ledger-head" id="tracks-head">
+              <h2 id="section-tracks-title">All Tracks</h2>
+              <div class="ledger-meta">
+                <span class="dim" id="track-count"></span>
+              </div>
+            </div>
+
+            <div class="ledger" id="track-table-wrap">
+              <table class="tracks" id="track-table">
+                <thead>
+                  <tr>
+                    <th scope="col" class="c-idx"><span class="sr-only">Number</span></th>
+                    <th scope="col">Title</th>
+                    <th scope="col">Artist</th>
+                    <th scope="col">Album</th>
+                    <th scope="col" class="c-num">Time</th>
+                    <th scope="col" class="c-num">Source</th>
+                    <th scope="col" class="c-act"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody id="track-rows"></tbody>
+              </table>
+            </div>
+
+            <!-- An album or artist opened from a card: its tracks, in place. -->
+            <div class="sheet album-sheet" id="album-detail" hidden>
+              <div class="sheet-head">
+                <div>
+                  <h2 id="album-detail-title">—</h2>
+                  <p class="fine dim sheet-meta" id="album-detail-meta"></p>
+                </div>
+                <div class="sheet-tools">
+                  <button id="album-play" class="btn-primary" type="button">
+                    <svg class="btn-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4.5 3.2 12.5 8l-8 4.8z" />
+                    </svg>
+                    <span>Play</span>
+                  </button>
+                  <button id="album-close" class="btn-quiet" type="button">Back</button>
+                </div>
+              </div>
+              <div class="ledger">
+                <table class="tracks" id="album-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="c-idx"><span class="sr-only">Number</span></th>
+                      <th scope="col">Title</th>
+                      <th scope="col">Artist</th>
+                      <th scope="col">Album</th>
+                      <th scope="col" class="c-num">Time</th>
+                      <th scope="col" class="c-num">Source</th>
+                      <th scope="col" class="c-act"><span class="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="album-track-rows"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ------------------------------------------------------ ARTISTS -->
+          <section class="view" id="view-artists" hidden>
+            <div class="wall wall-artists" id="artist-grid"></div>
+          </section>
+
+          <!-- ------------------------------------------------------- ALBUMS -->
+          <section class="view" id="view-albums" hidden>
+            <div class="wall wall-albums" id="album-grid"></div>
+          </section>
+
+          <!-- ----------------------------------------------------- PLAYLISTS -->
+          <section class="view" id="view-playlists" hidden>
+            <div class="composer">
+              <input
+                id="playlist-name-input"
+                type="text"
+                placeholder="Name a new playlist"
+                aria-label="New playlist name"
+                spellcheck="false"
+              />
+              <button id="create-playlist" class="btn-quiet" type="button">Create</button>
+            </div>
+            <div class="wall wall-playlists" id="playlist-grid"></div>
+
+            <div class="sheet" id="playlist-detail" hidden>
+              <div class="sheet-head">
+                <div class="sheet-identity">
+                  <span class="sheet-cover" id="playlist-detail-cover">
+                    <img id="playlist-cover-img" alt="" hidden />
+                    <span class="cover-empty" id="playlist-cover-empty" aria-hidden="true"></span>
+                  </span>
+                  <div>
+                    <h2 id="playlist-detail-title">—</h2>
+                    <p class="fine dim sheet-meta" id="playlist-detail-meta"></p>
+                  </div>
+                </div>
+                <div class="sheet-tools">
+                  <button id="playlist-play" class="btn-primary" type="button">
+                    <svg class="btn-glyph" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4.5 3.2 12.5 8l-8 4.8z" />
+                    </svg>
+                    <span>Play</span>
+                  </button>
+                  <button id="playlist-cover-pick" class="btn-quiet" type="button">
+                    Set picture
+                  </button>
+                  <input
+                    id="playlist-cover-file"
+                    type="file"
+                    accept="image/*,.jpg,.jpeg,.jfif,.png,.webp,.bmp"
+                    hidden
+                  />
+                  <button id="playlist-rename" class="btn-quiet" type="button">Rename</button>
+                  <button id="playlist-delete" class="btn-quiet is-danger" type="button">
+                    Delete
+                  </button>
+                  <button id="playlist-close" class="btn-quiet" type="button">Close</button>
+                </div>
+              </div>
+              <div class="ledger">
+                <table class="tracks" id="playlist-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="c-idx"><span class="sr-only">Number</span></th>
+                      <th scope="col">Title</th>
+                      <th scope="col">Artist</th>
+                      <th scope="col" class="c-num">Time</th>
+                      <th scope="col" class="c-act">Order</th>
+                    </tr>
+                  </thead>
+                  <tbody id="playlist-rows"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ----------------------------------------------------- FAVORITES -->
+          <section class="view" id="view-favorites" hidden>
+            <div class="ledger-head">
+              <h2 id="favorites-title">Marked tracks</h2>
+              <span class="dim" id="favorites-count"></span>
+            </div>
+            <div class="ledger">
+              <table class="tracks" id="favorites-table">
+                <thead>
+                  <tr>
+                    <th scope="col" class="c-idx"><span class="sr-only">Number</span></th>
+                    <th scope="col">Title</th>
+                    <th scope="col">Artist</th>
+                    <th scope="col">Album</th>
+                    <th scope="col" class="c-num">Time</th>
+                    <th scope="col" class="c-act"><span class="sr-only">Favorite</span></th>
+                  </tr>
+                </thead>
+                <tbody id="favorites-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ------------------------------------------------------- HISTORY -->
+          <section class="view" id="view-history" hidden>
+            <div class="ledger-head">
+              <div>
+                <h2>History</h2>
+                <p class="fine dim">Everything you have played in the last 24 hours.</p>
+              </div>
+              <div class="sheet-tools">
+                <span class="dim" id="history-count"></span>
+                <button id="clear-history" class="btn-quiet" type="button">Clear history</button>
+              </div>
+            </div>
+            <ol class="tape" id="history-list"></ol>
+          </section>
+
+          <!-- ------------------------------------------------------ SETTINGS -->
+          <section class="view" id="view-settings" hidden>
+            <div class="panel panel-output">
+              <div class="sheet-head">
+                <div>
+                  <h2>Output</h2>
+                  <p class="panel-note">
+                    Exclusive mode hands the device your file's own sample rate and channel
+                    count, adapting only the sample encoding. If a device refuses it, LUMEN
+                    drops to shared mode and tells you here.
+                  </p>
+                </div>
+              </div>
+
+              <div class="field-row">
+                <label for="output-device-select">Device</label>
+                <select id="output-device-select" aria-label="Output device"></select>
+              </div>
+              <p class="fine dim device-note" id="device-note"></p>
+
+              <!-- One mode, always: the device decides whether the Windows
+                   mixer sits in the path. A mode picker that silently lands on
+                   shared anyway is a lie with extra steps. -->
+              <div class="field-row">
+                <span class="field-label">Mode</span>
+                <span class="mode-readout" id="mode-readout">Shared</span>
+              </div>
+              <p class="fine dim device-note">
+                Output goes straight to the device at the file's own rate. Windows
+                mixes only when the device asks it to.
+              </p>
+
+              <!-- What the stream is actually doing right now. -->
+              <div class="desk" id="output-readout">
+                <div class="desk-verdict">
+                  <i class="verdict-lamp" id="out-lamp" aria-hidden="true"></i>
+                  <div>
+                    <b id="out-verdict">No stream open</b>
+                    <span id="out-conversion">Start a track to see the live signal path.</span>
+                  </div>
+                </div>
+                <div class="desk-grid">
+                  <div class="desk-cell"><b id="out-rate">—</b><em>Sample rate</em></div>
+                  <div class="desk-cell"><b id="out-channels">—</b><em>Channels</em></div>
+                  <div class="desk-cell"><b id="out-format">—</b><em>Encoding</em></div>
+                  <div class="desk-cell"><b id="out-mix">—</b><em>Device mix</em></div>
+                  <div class="desk-cell"><b id="out-requested">—</b><em>Requested</em></div>
+                  <div class="desk-cell"><b id="out-actual">—</b><em>Granted</em></div>
+                  <div class="desk-cell"><b id="out-underruns">—</b><em>Underruns</em></div>
+                  <div class="desk-cell"><b id="out-state">—</b><em>Device state</em></div>
+                </div>
+                <dl class="wire">
+                  <dt>Device</dt><dd id="out-device">—</dd>
+                  <dt>Endpoint</dt><dd id="out-endpoint">—</dd>
+                </dl>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head">
+                <div><h2>Library sources</h2></div>
+                <span class="fine dim" id="scan-progress">Idle.</span>
+              </div>
+              <div class="field-row">
+                <input
+                  id="folder-input"
+                  type="text"
+                  placeholder="C:\path\to\music"
+                  aria-label="Library folder path"
+                  spellcheck="false"
+                />
+                <button id="add-folder" class="btn-quiet" type="button">Add folder</button>
+              </div>
+              <ul class="folders" id="folder-list"></ul>
+              <div class="field-row">
+                <button id="start-scan" class="btn-primary" type="button">Scan library</button>
+                <button id="cancel-scan" class="btn-quiet" type="button" disabled>
+                  Cancel scan
+                </button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head">
+                <div><h2>Engine events</h2></div>
+                <span class="fine dim">Newest first</span>
+              </div>
+              <ol class="events" id="event-log">
+                <li class="dim">No events yet.</li>
+              </ol>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head">
+                <div><h2>Room colour</h2></div>
+                <span class="fine dim">Every lamp follows this</span>
+              </div>
+              <div class="segmented" id="room-modes" role="group" aria-label="Room colour">
+                <button type="button" data-room="album">From album</button>
+                <button type="button" data-room="cycle">Red → purple → pink</button>
+                <button type="button" data-room="candle">Candle</button>
+              </div>
+              <p class="fine dim" id="room-note"></p>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head"><div><h2>Gapless playback</h2></div></div>
+              <label class="switch-row">
+                <input type="checkbox" id="gapless-toggle" />
+                <span>Cross track boundaries without a gap</span>
+              </label>
+              <p class="fine dim">
+                The next track's decoder is opened while the current one is still playing, so the
+                output stream never stops between tracks. Turn it off to hear the difference.
+              </p>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head"><div><h2>About</h2></div></div>
+              <dl class="wire" id="app-info"></dl>
+            </div>
+
+            <div class="panel">
+              <div class="sheet-head"><div><h2>Figure panel</h2></div></div>
+              <label class="switch-row">
+                <input type="checkbox" id="figure-toggle" />
+                <span>Show the figure panel in the Library</span>
+              </label>
+              <div class="panel">
+              <div class="sheet-head"><div><h2>Figure panel</h2></div></div>
+              <div class="field-row">
+                <button id="figure-pick" class="btn-quiet" type="button">Choose a GIF or PNG…</button>
+                <input
+                  id="figure-file"
+                  type="file"
+                  accept="image/gif,image/png,image/webp,image/jpeg"
+                  hidden
+                />
+                <button id="figure-clear" class="btn-quiet" type="button">Clear</button>
+              </div>
+              <p class="fine dim" id="figure-note"></p>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <!-- ================================================== figure panel -->
+      <!-- A portrait slot down the entire right of the window, from the top of
+           the stage to the top of the console. Off until Settings enables it. -->
+      <aside class="figure-rail" id="figure-wrap" hidden aria-label="Animated figure">
+        <div class="figure-frame">
+          <img id="figure-img" alt="Animated figure" hidden />
+          <div class="figure-empty" id="figure-empty">
+            <svg viewBox="0 0 48 64" fill="none" aria-hidden="true">
+              <rect x="6" y="4" width="36" height="56" rx="3" class="fe-frame" />
+              <circle cx="24" cy="24" r="7" class="fe-head" />
+              <path d="M12 52c3-9 8-13 12-13s9 4 12 13" class="fe-body" />
+            </svg>
+            <p>Pick a GIF or PNG in Settings to hang here.</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ========================================================== console -->
+      <footer class="console" id="player" aria-label="Playback">
+        <!-- The console lip carries progress as light, so the position is
+             readable without looking at the numbers. -->
+        <div class="console-lip" aria-hidden="true"><i id="console-progress"></i></div>
+
+        <div class="console-inner">
+          <div class="console-now">
+            <div class="console-art">
+              <img id="player-art" alt="" hidden />
+              <span class="console-art-empty" id="player-art-empty" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="8" />
+                  <circle cx="12" cy="12" r="2.2" />
+                </svg>
+              </span>
+            </div>
+            <div class="console-text">
+              <span class="console-title" id="player-title">Nothing playing</span>
+              <span class="console-artist" id="player-artist"></span>
+              <span class="console-state" id="player-state" data-state="stopped">Stopped</span>
+            </div>
+          </div>
+
+          <div class="console-transport">
+            <div class="transport" role="group" aria-label="Transport">
+              <button id="shuffle-btn" class="tbtn is-quiet" type="button" title="Shuffle">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M2 4h2.6l6.8 8H14M2 12h2.6l2.2-2.6M9.8 5.6 11.4 4H14" />
+                  <path d="M12.2 2.2 14.2 4l-2 1.8M12.2 10.2 14.2 12l-2 1.8" />
+                </svg>
+                <span class="sr-only">Shuffle</span>
+              </button>
+              <button id="prev-btn" class="tbtn" type="button" title="Previous">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M12.5 3.4v9.2L5.8 8z" fill="currentColor" stroke="none" />
+                  <path d="M4 3.4v9.2" />
+                </svg>
+                <span class="sr-only">Previous track</span>
+              </button>
+              <button
+                id="play-pause-btn"
+                class="tbtn is-primary"
+                type="button"
+                title="Play/Pause"
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path id="play-glyph" d="M6.5 4.2 15 10l-8.5 5.8z" fill="currentColor" stroke="none" />
+                </svg>
+                <span class="sr-only" id="play-label">Play</span>
+              </button>
+              <button id="next-btn" class="tbtn" type="button" title="Next">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 3.4v9.2L10.2 8z" fill="currentColor" stroke="none" />
+                  <path d="M12 3.4v9.2" />
+                </svg>
+                <span class="sr-only">Next track</span>
+              </button>
+              <button
+                id="repeat-btn"
+                class="tbtn is-quiet"
+                type="button"
+                data-repeat="off"
+                title="No loop — play the queue once"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path id="repeat-path" d="M12.5 3.4H5.2a2.4 2.4 0 0 0-2.4 2.4v3.6M3.5 12.6h7.3a2.4 2.4 0 0 0 2.4-2.4V6.6" />
+                  <path id="repeat-head-top" d="M12.9 1.4l2.1 2-2.1 2" />
+                  <path id="repeat-head-bottom" d="M11.4 9.6l2.1 2-2.1 2" />
+                  <path id="repeat-one" d="" />
+                  <path id="repeat-off" d="M13.6 2.6 2.9 13.3" />
+                </svg>
+                <span class="sr-only">Repeat</span>
+              </button>
+            </div>
+
+            <div class="scrub">
+              <span class="time" id="time-current">0:00</span>
+              <input
+                id="seek-slider"
+                type="range"
+                min="0"
+                max="1000"
+                value="0"
+                disabled
+                aria-label="Seek position"
+              />
+              <span class="time" id="time-total">0:00</span>
+            </div>
+          </div>
+
+          <div class="console-right">
+            <div class="monitor" id="output-chip" title="Output device and mode">
+              <span class="monitor-device" id="chip-device">No stream</span>
+              <span class="monitor-sub">
+                <span class="lamp" id="chip-mode">idle</span>
+                <span class="monitor-format" id="chip-format"></span>
+              </span>
+            </div>
+            <div class="volume">
+              <svg class="vol-glyph" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M4 7.6h2.8L10.4 4.4v11.2L6.8 12.4H4z" />
+                <path d="M13.4 7.4a3.6 3.6 0 0 1 0 5.2" />
+              </svg>
+              <input
+                id="volume-slider"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+                aria-label="Volume"
+              />
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+</html>

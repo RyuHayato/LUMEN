@@ -1,0 +1,18 @@
+/target
+**/*.rs.bk
+
+# Local verification scratch: isolated APPDATA, test library, capture harness.
+# See .devkit/README.md. Never committed.
+.devkit/
+
+# Future frontend tooling (Phase 1+)
+node_modules/
+dist/
+
+# Local runtime data (never commit)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+logs/
+

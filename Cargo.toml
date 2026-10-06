@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "LicenseRef-Proprietary"
+publish = false
+
+# LUMEN is a desktop application: keep Cargo.lock committed.
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

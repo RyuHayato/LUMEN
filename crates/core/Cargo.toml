@@ -1,0 +1,47 @@
+[package]
+name = "lumen-core"
+description = "LUMEN core: playback, audio, library, and persistence. No UI dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "2"
+crossbeam-channel = "0.5"
+tracing = "0.1"
+
+# Phase 1 (see docs/DECISIONS.md dependency register):
+walkdir = "2"                                    # recursive traversal with per-entry error handling + link control
+lofty = "0.25"                                 # tag/metadata extraction (all formats built-in)
+symphonia = { version = "0.5", default-features = false, features = [
+    # Formats: the containers SUPPORTED_EXTENSIONS promises to open.
+    "wav", "aiff", "caf", "isomp4", "mkv", "ogg",
+    # Codecs: must stay in step with probe::codec_name.
+    "pcm", "adpcm", "flac", "alac", "aac", "mp1", "mp2", "mp3", "vorbis",
+] }  # stream probing + playback decode
+sha2 = "0.10"                                    # content-addressed artwork dedup
+
+# Phase 2 (ADR-002): WASAPI output on the official Windows bindings.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Multimedia",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Ole",
+    "Win32_System_Threading",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_System_Variant",
+    "Win32_Security",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+windows-core = "0.62"
+
+[dev-dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }  # direct DB assertions in integration tests
+filetime = "0.2"                                 # mtime control for identity tests (drive-reconnect simulation)

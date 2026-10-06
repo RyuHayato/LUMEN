@@ -1,0 +1,3481 @@
+﻿/* ==========================================================================
+   LUMEN â€” a listening room for a local hi-fi library.
+
+   The idea
+   --------
+   "Lumen" is a unit of light, so light is the whole design. The accent colour
+   is sampled from the artwork of whatever is playing and crossfaded into the
+   chrome; at rest it settles back to candlelight gold. That gives the room
+   drama without costing the eyes anything, because the colour always arrives
+   as a wide, dim glow *behind* an object â€” never as a saturated stroke next
+   to type.
+
+   Planes, front to back
+   ---------------------
+     console   the instrument along the bottom edge
+     stage     the listening surface where music lives
+     rail      the near wall: navigation
+     nave      blurred architecture + the live light + a vignette
+
+   Rules
+   -----
+   â€¢ Type never sits on texture. The cathedral is blurred to atmosphere.
+   â€¢ Artwork is content: opaque, crisp, never tinted.
+   â€¢ Shape encodes kind: albums are squares, artists are discs, genres are
+     plaques, playlists are stacks.
+   â€¢ Motion answers a change â€” a new track, a hover, a boot. Nothing loops
+     for decoration, and nothing moves under prefers-reduced-motion.
+   ========================================================================== */
+
+/* The live light is registered so the hue can genuinely interpolate when the
+   track changes, instead of snapping. */
+@property --live-h {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 41;
+}
+@property --live-s {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 70%;
+}
+@property --live-l {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 64%;
+}
+
+/* ------------------------------------------------------------------ tokens */
+:root {
+  color-scheme: dark;
+
+  /* the nave, deepest first (lifted so the room reads, never broods) */
+  --ink: #0a0a12;
+  --ink-1: #0e0e17;
+  --ink-2: #14141d;
+  --ink-3: #1b1b28;
+  --ink-4: #252535;
+
+  /* type */
+  --ice: #ecebf3;
+  --mist: #b6b2c4;
+  --haze: #898499;
+  --haze-dim: #5e5a6c;
+
+  /* hairlines */
+  --hair: rgb(236 233 245 / 0.07);
+  --hair-lit: rgb(236 233 245 / 0.13);
+
+  /* candlelight gold: LUMEN's own identity, used when nothing is playing */
+  --gold: #e3bb6b;
+
+  /* the live light, sampled from artwork */
+  --live: hsl(var(--live-h) var(--live-s) var(--live-l));
+  --live-deep: hsl(var(--live-h) calc(var(--live-s) * 0.8) 34%);
+  --live-glow: hsl(var(--live-h) var(--live-s) var(--live-l) / 0.42);
+  --live-faint: hsl(var(--live-h) calc(var(--live-s) * 0.8) 56% / 0.13);
+  --live-hair: hsl(var(--live-h) calc(var(--live-s) * 0.7) 60% / 0.3);
+
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI Variable Display",
+    "Segoe UI", system-ui, sans-serif;
+
+  /* metrics */
+  --rail-w: 228px;
+  --rail-w-collapsed: 66px;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t: 160ms;
+  --t-slow: 320ms;
+
+  /* the hue crossfade when a new track opens */
+  transition:
+    --live-h 900ms var(--ease),
+    --live-s 900ms var(--ease),
+    --live-l 900ms var(--ease);
+}
+
+/* ------------------------------------------------------------------- reset */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--ice);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+}
+
+/* The `hidden` attribute is how this app hides things, and any component rule
+   that sets `display` silently outranks the user-agent rule for [hidden]. That
+   has bitten this stylesheet four separate times already (the plate's empty
+   mark, the console's, the figure's, and a `.ledger-head` that stayed on screen
+   as an orphan heading over nothing). One rule here ends the whole class of
+   bug instead of chasing each component. */
+[hidden] {
+  display: none !important;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+/* Every icon in the app is a hairline drawing on currentColor. */
+svg {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--haze);
+}
+
+.fine {
+  font-size: 12px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(236 233 245 / 0.16) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgb(236 233 245 / 0.14);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 7px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(236 233 245 / 0.28);
+  background-clip: content-box;
+}
+
+/* ==========================================================================
+   THE NAVE
+   The architecture is present as texture only: blurred past legibility so no
+   spire ever lands behind a track title. The light layer on top of it is the
+   one thing that carries the playing album's colour at full width.
+   ========================================================================== */
+
+.nave {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+/* The architecture plays behind the room: blurred, dimmed, and alive. */
+/* The banner runs live behind the whole room: bright enough to read as the
+   cathedral, dimmed enough that no track title ever has to compete. */
+#gothic-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
+  opacity: 0.55;
+  filter: blur(3px) saturate(0.8) brightness(0.5);
+}
+
+/* The console stays black; the cycle only tints its own gradient.
+   The sweep overlay that used to sit here was a flat screen-blend fill, which
+   washed the whole bar to one olive tone and buried the lamp gradients. The
+   colour now goes into the console's own background instead (see
+   applyCycleLight), which is both the look that was wanted and cheaper: one
+   element's background, repainted once per tick. */
+
+/* Two light sources: the live one high on the key side, and a cold fill
+   opposite it so the dark half never goes flat black. */
+.nave-light {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      62% 52% at 16% -8%,
+      hsl(var(--live-h) calc(var(--live-s) * 0.85) 46% / 0.3),
+      transparent 70%
+    ),
+    radial-gradient(
+      48% 44% at 88% 6%,
+      hsl(var(--live-h) calc(var(--live-s) * 0.6) 40% / 0.14),
+      transparent 72%
+    ),
+    radial-gradient(70% 60% at 78% 104%, rgb(44 48 84 / 0.3), transparent 70%);
+}
+
+.nave-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    /* faint vertical courses: verticality is the gothic cue, not ornament */
+    repeating-linear-gradient(
+      90deg,
+      rgb(236 233 245 / 0.012) 0 1px,
+      transparent 1px 148px
+    ),
+    radial-gradient(130% 110% at 50% 12%, transparent 42%, rgb(14 14 22 / 0.5) 100%),
+    linear-gradient(180deg, rgb(24 24 34 / 0.2), rgb(18 18 28 / 0.35) 60%, rgb(12 12 20 / 0.6));
+}
+
+/* -------------------------------------------------------- welcome flourish */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(90% 70% at 50% 30%, rgb(40 24 40 / 0.9), transparent 70%),
+    rgb(4 4 8 / 0.98);
+  transition: opacity 700ms ease, visibility 700ms;
+}
+
+.welcome.is-leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.welcome-inner {
+  text-align: center;
+  animation: welcome-rise 900ms ease-out both;
+}
+
+@keyframes welcome-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.welcome-to {
+  margin: 0 0 6px;
+  color: rgb(226 214 196 / 0.55);
+  font-size: 13px;
+  letter-spacing: 0.55em;
+  text-transform: uppercase;
+}
+
+.welcome-word {
+  margin: 0;
+  font-size: clamp(64px, 11vw, 132px);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em; /* keeps the tracked word optically centred */
+  background: linear-gradient(
+    100deg,
+    hsl(var(--live-h) calc(var(--live-s) * 0.55) 82%),
+    hsl(calc(var(--live-h) + 26) calc(var(--live-s) * 0.9) 62%),
+    hsl(calc(var(--live-h) + 300) calc(var(--live-s) * 0.8) 66%),
+    hsl(calc(var(--live-h) + 26) calc(var(--live-s) * 0.9) 62%),
+    hsl(var(--live-h) calc(var(--live-s) * 0.55) 82%)
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: welcome-sheen 5s ease-in-out infinite;
+}
+
+@keyframes welcome-sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ------------------------------------------------------------------ layout */
+.app {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* The third track is the figure rail: auto when it is on, 0 when it is off,
+     so the stage never keeps a reserved gutter for something invisible. */
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "rail stage figure"
+    "console console console";
+  height: 100vh;
+  transition: grid-template-columns var(--t-slow) var(--ease);
+}
+
+.app:has(.figure-rail[hidden]) {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) 0;
+}
+
+.app.is-collapsed {
+  grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr) auto;
+}
+
+.app.is-collapsed:has(.figure-rail[hidden]) {
+  grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr) 0;
+}
+
+/* ==========================================================================
+   THE RAIL
+   Sconces along a wall, not a list of links. Each item is an unlit lamp; the
+   one you are in lights, and its light spills right across the row and catches
+   the wall's edge. Hovering previews that light. The device does the whole job
+   of "where am I" with nothing left over for decoration.
+   ========================================================================== */
+
+.rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 26px 0 12px;
+  position: relative;
+  background: linear-gradient(
+    100deg,
+    rgb(32 32 44 / 0.96) 0%,
+    rgb(26 26 36 / 0.93) 58%,
+    rgb(20 20 30 / 0.88) 100%
+  );
+}
+
+/* The wall's lit edge. */
+.rail::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--live-hair) 10%,
+    rgb(236 233 245 / 0.07) 52%,
+    transparent
+  );
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 0 20px 20px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: var(--live);
+}
+
+.brand-mark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bm-halo {
+  stroke: var(--live);
+  stroke-width: 1;
+  opacity: 0.2;
+}
+
+.bm-ring {
+  stroke: var(--live);
+  stroke-width: 1.4;
+  opacity: 0.6;
+}
+
+.bm-core {
+  fill: var(--live);
+  stroke: none;
+  filter: drop-shadow(0 0 7px var(--live-glow));
+}
+
+/* The mark is an aperture, and it pulses whether or not a stream is open —
+   it is the one thing on screen that proves the app is awake. The two rings
+   breathe on offset phases so the motion reads as light travelling outward
+   rather than a single shape flapping. */
+.bm-halo,
+.bm-ring,
+.bm-core,
+.ae-halo,
+.ae-ring,
+.ae-core {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.bm-halo {
+  animation: pulse-halo 4.4s var(--ease) infinite;
+}
+
+.bm-ring {
+  animation: pulse-ring 4.4s var(--ease) infinite 0.55s;
+}
+
+.bm-core {
+  animation: pulse-core 4.4s var(--ease) infinite 1.1s;
+}
+
+/* While audio moves the aperture opens a little wider and faster. */
+body.is-playing .bm-halo {
+  animation: aperture 3.4s var(--ease) infinite;
+}
+
+body.is-playing .bm-core {
+  animation: aperture-core 3.4s var(--ease) infinite;
+}
+
+@keyframes pulse-halo {
+  0%,
+  100% {
+    opacity: 0.14;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes pulse-core {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes aperture {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes aperture-core {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  color: var(--ice);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 10px;
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.nav-group {
+  padding: 16px 12px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--haze-dim);
+  opacity: 0.75;
+}
+
+.nav-group:first-child {
+  padding-top: 2px;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--haze);
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  text-align: left;
+  transition: color var(--t) var(--ease);
+}
+
+/* The light itself: a glow that starts at the lamp and falls off to the
+   right, rather than a flat highlight block. */
+.nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(
+    120% 160% at 16px 50%,
+    hsl(var(--live-h) calc(var(--live-s) * 0.9) 52% / 0.4),
+    transparent 72%
+  );
+  transition: opacity var(--t-slow) var(--ease);
+}
+
+.nav-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  stroke-width: 1.5;
+  color: var(--haze-dim);
+  transition:
+    color var(--t) var(--ease),
+    filter var(--t) var(--ease);
+}
+
+.nav-label {
+  position: relative;
+}
+
+/* The wall edge beside the lit lamp. */
+.nav-beam {
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
+  background: var(--live);
+  transition:
+    height var(--t-slow) var(--ease-out),
+    box-shadow var(--t) var(--ease);
+}
+
+.nav-item:hover {
+  color: var(--mist);
+}
+
+.nav-item:hover::before {
+  opacity: 0.4;
+}
+
+.nav-item:hover .nav-icon {
+  color: var(--mist);
+}
+
+.nav-item.is-active {
+  color: var(--ice);
+}
+
+.nav-item.is-active::before {
+  opacity: 1;
+}
+
+.nav-item.is-active .nav-icon {
+  color: var(--live);
+  filter: drop-shadow(0 0 6px var(--live-glow));
+}
+
+.nav-item.is-active .nav-beam {
+  height: 24px;
+  box-shadow: 0 0 14px var(--live-glow);
+}
+
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px 0;
+  margin-top: auto;
+  border-top: 1px solid var(--hair);
+}
+
+.rail-base {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 2px 0 12px;
+}
+
+/* A small lit rule where the version chip used to hang: the rail's footer
+   reads as an intentional baseboard instead of debug residue. */
+.rail-ornament {
+  display: block;
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--hair-lit) 30%,
+    var(--live-hair) 50%,
+    var(--hair-lit) 70%,
+    transparent
+  );
+  opacity: 0.7;
+}
+
+/* The main column and console get a gentle frame, never a hard edge: pure
+   black fills only ever appear as depth under shadow, not as a box outline. */
+.rail {
+  border-radius: 0 18px 0 0;
+}
+
+.stage {
+  border-top-right-radius: 18px;
+}
+
+.console {
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  color: var(--haze-dim);
+  transition:
+    color var(--t) var(--ease),
+    background-color var(--t) var(--ease);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-btn:hover {
+  color: var(--ice);
+  background: rgb(236 233 245 / 0.06);
+}
+
+/* collapsed rail: the lamps carry everything */
+.is-collapsed .wordmark,
+.is-collapsed .nav-label,
+.is-collapsed .rail-meta {
+  display: none;
+}
+
+.is-collapsed .nav-group {
+  height: 1px;
+  padding: 0;
+  margin: 12px 14px;
+  overflow: hidden;
+  background: var(--hair);
+}
+
+.is-collapsed .brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.is-collapsed .nav-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.is-collapsed .nav-item::before {
+  background: radial-gradient(
+    140% 150% at 50% 50%,
+    hsl(var(--live-h) calc(var(--live-s) * 0.9) 52% / 0.4),
+    transparent 72%
+  );
+}
+
+.is-collapsed .rail-base {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.is-collapsed .rail-ornament {
+  display: none;
+}
+
+/* ==========================================================================
+   THE STAGE
+   ========================================================================== */
+
+.stage {
+  --gutter: clamp(22px, 2.6vw, 42px);
+  grid-area: stage;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px var(--gutter) 30px;
+  scroll-padding-top: 96px; /* an anchored row clears the pinned header */
+}
+
+.stage:focus {
+  outline: none;
+  scroll-behavior: smooth;
+}
+
+/* The head is pinned: the view's name and the search field stay reachable no
+   matter how far down the section is scrolled. It reads as a floating rail
+   rather than a wall: rounded on every corner, carried on a soft shadow. */
+.stage-head {
+  position: sticky;
+  top: 8px;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 18px 20px 18px;
+  margin: 0 0 22px;
+  border: 1px solid var(--hair);
+  border-radius: 18px;
+  background: rgb(15 15 24 / 0.82);
+  backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow:
+    0 18px 40px -22px rgb(0 0 0 / 0.85),
+    inset 0 1px 0 rgb(236 233 245 / 0.06);
+  /* The bar itself eases in when a view swaps */
+  animation: head-settle var(--t-slow) var(--ease-out) both;
+}
+
+@keyframes head-settle {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The figure rail sits behind this column; make sure the pinned header's
+   backdrop never paints over it when the two meet at the top. */
+.app:has(.figure-rail:not([hidden])) .stage-head {
+  background: rgb(15 15 24 / 0.88);
+}
+
+.stage-head h1 {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 1.04;
+  color: var(--ice);
+}
+
+.stage-sub {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--haze);
+}
+
+.stage-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(320px, 40%);
+  flex: none;
+}
+
+.stage-search[hidden] {
+  display: none;
+}
+
+.search-glyph {
+  position: absolute;
+  left: 13px;
+  width: 15px;
+  height: 15px;
+  color: var(--haze-dim);
+  pointer-events: none;
+}
+
+#search-input {
+  width: 100%;
+  padding: 9px 14px 9px 36px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 14px;
+  background: rgb(5 5 10 / 0.55);
+  color: var(--ice);
+  font-size: 13.5px;
+  user-select: text;
+  transition:
+    border-color var(--t) var(--ease),
+    box-shadow var(--t) var(--ease);
+}
+
+#search-input::placeholder {
+  color: var(--haze-dim);
+}
+
+#search-input:focus {
+  outline: none;
+  border-color: var(--live-hair);
+  box-shadow: 0 0 0 3px var(--live-faint);
+}
+
+.view[hidden] {
+  display: none;
+}
+
+/* Every view change eases in rather than snapping: opacity + a small rise is
+   enough motion that the switch reads as a decision, not a glitch. */
+.view.is-active {
+  animation: view-enter 440ms var(--ease-out) both;
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   THE PLATE â€” what is playing, and proof of how it is playing.
+   ========================================================================== */
+
+.plate {
+  display: grid;
+  grid-template-columns: minmax(170px, 208px) minmax(0, 1fr) minmax(190px, 230px);
+  gap: clamp(22px, 2.6vw, 38px);
+  align-items: center;
+  padding-bottom: 24px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--hair);
+}
+
+/* With no side rail to show, the plate closes up rather than leaving a third
+   of the row empty. */
+.plate:has(> .plate-rail[hidden]) {
+  grid-template-columns: minmax(170px, 208px) minmax(0, 1fr);
+}
+
+/* The bloom is the artwork itself, scaled and blurred behind the sleeve, so
+   the halo is always exactly the record's own colour. */
+.plate-frame {
+  position: relative;
+}
+
+.plate-bloom {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  border-radius: 50%;
+  filter: blur(40px) saturate(1.7) brightness(0.95);
+  opacity: 0.6;
+  z-index: 0;
+  transition: opacity var(--t-slow) var(--ease);
+}
+
+.plate-bloom[hidden] {
+  display: none;
+}
+
+.plate-art {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(150deg, var(--ink-3), var(--ink));
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.1),
+    0 26px 54px -20px rgb(0 0 0 / 0.9),
+    0 4px 14px -6px rgb(0 0 0 / 0.75);
+}
+
+.plate-art img,
+.console-art img,
+.wall-art img,
+.more-art img,
+.tape-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* An empty sleeve is still an object: the aperture mark at size, lit. */
+.art-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      90% 76% at 28% 14%,
+      hsl(var(--live-h) calc(var(--live-s) * 0.7) 40% / 0.4),
+      transparent 68%
+    ),
+    linear-gradient(155deg, var(--ink-3), var(--ink-1) 60%, var(--ink));
+}
+
+/* Hiding is handled once, by the global [hidden] rule near the top. */
+.art-empty svg {
+  width: 44%;
+  height: 44%;
+  color: var(--live);
+  overflow: visible;
+}
+
+.ae-halo {
+  stroke-width: 1;
+  opacity: 0.22;
+  animation: pulse-halo 4.4s var(--ease) infinite;
+}
+
+.ae-ring {
+  stroke-width: 1.6;
+  opacity: 0.5;
+  animation: pulse-ring 4.4s var(--ease) infinite 0.55s;
+}
+
+.ae-core {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 10px var(--live-glow));
+  animation: pulse-core 4.4s var(--ease) infinite 1.1s;
+}
+
+.eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--live);
+}
+
+.plate-body h2 {
+  margin-top: 6px;
+  font-family: var(--display);
+  font-size: clamp(30px, 3.4vw, 46px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: 0.002em;
+  color: var(--ice);
+  text-wrap: balance;
+}
+
+.plate-artist {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--mist);
+}
+
+.plate-artist:empty {
+  display: none;
+}
+
+.plate-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--haze);
+  font-variant-numeric: tabular-nums;
+}
+
+.plate-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.plate-rail {
+  min-width: 0;
+  padding-left: clamp(16px, 1.6vw, 24px);
+  border-left: 1px solid var(--hair);
+}
+
+.plate-rail[hidden] {
+  display: none;
+}
+
+.rail-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rail-title h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mist);
+}
+
+.more-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 176px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 5px;
+  border-radius: 7px;
+  text-align: left;
+  transition: background-color var(--t) var(--ease);
+}
+
+.more-item:hover {
+  background: rgb(236 233 245 / 0.05);
+}
+
+.more-art {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(150deg, var(--ink-3), var(--ink));
+  color: var(--haze);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.more-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.more-name {
+  font-size: 13px;
+  color: var(--mist);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.more-item:hover .more-name {
+  color: var(--ice);
+}
+
+.more-meta {
+  font-size: 11px;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-note {
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--haze);
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   THE SIGNAL ROW â€” lamps, not labels.
+   A clean path is why this app exists, so it gets the one badge that lights.
+   ========================================================================== */
+
+.signal-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.signal-row[hidden] {
+  display: none;
+}
+
+.verdict,
+.gauge {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: rgb(5 5 10 / 0.5);
+}
+
+.gauge {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 13px;
+  min-width: 0;
+}
+
+.gauge b {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ice);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gauge em {
+  font-size: 10.5px;
+  font-style: normal;
+  color: var(--haze-dim);
+}
+
+.gauge-wide {
+  max-width: 230px;
+}
+
+.gauge-wide b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The lamp reads as hardware: dark glass until the path is actually clean. */
+.verdict-lamp {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: rgb(236 233 245 / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
+  transition:
+    background-color var(--t-slow) var(--ease),
+    box-shadow var(--t-slow) var(--ease);
+}
+
+.verdict b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mist);
+}
+
+/* Exclusive and untouched: the device is taking the file as it is. */
+.verdict.is-pure {
+  border-color: hsl(var(--live-h) calc(var(--live-s) * 0.7) 60% / 0.42);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--live-h) calc(var(--live-s) * 0.8) 50% / 0.2),
+    rgb(5 5 10 / 0.5)
+  );
+  box-shadow: 0 0 22px -8px var(--live-glow);
+}
+
+.verdict.is-pure .verdict-lamp {
+  background: var(--live);
+  box-shadow:
+    0 0 10px var(--live),
+    0 0 20px var(--live-glow);
+}
+
+.verdict.is-pure b {
+  color: var(--ice);
+}
+
+/* Exclusive, but LUMEN re-encoded the samples (still no resampling). */
+.verdict.is-clean .verdict-lamp {
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live-glow);
+  opacity: 0.75;
+}
+
+.verdict.is-clean b {
+  color: var(--ice);
+}
+
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
+.btn-primary,
+.btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 18px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition:
+    color var(--t) var(--ease),
+    background var(--t) var(--ease),
+    border-color var(--t) var(--ease),
+    box-shadow var(--t) var(--ease),
+    transform var(--t) var(--ease);
+}
+
+.btn-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.btn-primary {
+  color: #0a0a0f;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--live-h) var(--live-s) calc(var(--live-l) + 6%)),
+    hsl(var(--live-h) calc(var(--live-s) * 0.95) calc(var(--live-l) - 10%))
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 8px 22px -12px var(--live-glow);
+}
+
+.btn-primary .btn-glyph {
+  fill: currentColor;
+  stroke: none;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.36),
+    0 14px 30px -12px var(--live-glow);
+}
+
+.btn-quiet {
+  color: var(--mist);
+  border: 1px solid var(--hair-lit);
+  background: rgb(236 233 245 / 0.03);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--ice);
+  border-color: var(--live-hair);
+  background: rgb(236 233 245 / 0.06);
+}
+
+.btn-quiet.is-danger:hover:not(:disabled) {
+  color: #f08c9c;
+  border-color: rgb(240 140 156 / 0.45);
+  background: rgb(240 140 156 / 0.08);
+}
+
+/* A button that is telling you something is already set: "Change picture". */
+.btn-quiet.is-on {
+  color: var(--live);
+  border-color: var(--live-hair);
+  background: hsl(var(--live-h) calc(var(--live-s) * 0.5) 30% / 0.16);
+}
+
+.btn-primary:disabled,
+.btn-quiet:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   THE LEDGER â€” tracks as records, with the playing one lit.
+   ========================================================================== */
+
+.ledger-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 10px;
+}
+
+.ledger-head h2 {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ice);
+}
+
+.ledger-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  font-size: 12px;
+}
+
+.ledger-stats {
+  display: flex;
+  gap: 14px;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-stats b {
+  font-weight: 600;
+  color: var(--mist);
+}
+
+.ledger {
+  border-top: 1px solid var(--hair);
+}
+
+.tracks {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tracks thead th {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hair);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--haze-dim);
+  text-align: left;
+}
+
+.tracks thead th:nth-child(3),
+.tracks thead th:nth-child(4) {
+  width: 21%;
+}
+
+.tracks tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgb(236 233 245 / 0.04);
+  font-size: 13.5px;
+  color: var(--mist);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tracks tbody tr {
+  cursor: pointer;
+  transition: background-color var(--t) var(--ease);
+}
+
+.tracks tbody tr:hover td {
+  background: rgb(236 233 245 / 0.04);
+  color: var(--ice);
+}
+
+.tracks .c-idx {
+  width: 46px;
+}
+
+.tracks .c-num {
+  width: 92px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.tracks .c-act {
+  width: 84px;
+  text-align: right;
+}
+
+.tracks th.c-act,
+.tracks th.c-num {
+  text-align: right;
+}
+
+.tracks .title-cell {
+  color: var(--ice);
+  font-weight: 600;
+}
+
+/* A sleeve sits inside the title cell, not in a column of its own: rows keep
+   their alignment whether or not the track has artwork. */
+.title-cell.has-art {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.row-art {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: 0 4px 10px -6px rgb(0 0 0 / 0.9);
+}
+
+.title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The gutter does three jobs: the row number at rest, a play mark on hover,
+   and a level indicator on whatever is open. */
+.row-idx {
+  position: relative;
+  display: grid;
+  place-items: center start;
+  width: 22px;
+  height: 16px;
+}
+
+.row-n {
+  font-size: 12px;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.row-play {
+  display: none;
+  width: 11px;
+  height: 11px;
+  fill: var(--ice);
+  stroke: none;
+}
+
+.row-eq {
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 13px;
+}
+
+.row-eq i {
+  width: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--live);
+  box-shadow: 0 0 6px var(--live-glow);
+}
+
+.tracks tbody tr:hover .row-n {
+  visibility: hidden;
+}
+
+.tracks tbody tr:hover .row-play {
+  display: block;
+  position: absolute;
+  left: 0;
+}
+
+.tracks tbody tr.is-current .row-n,
+.tracks tbody tr.is-current:hover .row-n,
+.tracks tbody tr.is-current:hover .row-play {
+  display: none;
+}
+
+.tracks tbody tr.is-current .row-eq {
+  display: flex;
+}
+
+/* The bars only move while a stream is actually running. */
+body.is-playing .row-eq i:nth-child(1) {
+  animation: eq 900ms steps(6, end) infinite alternate;
+}
+
+body.is-playing .row-eq i:nth-child(2) {
+  animation: eq 700ms 120ms steps(6, end) infinite alternate;
+}
+
+body.is-playing .row-eq i:nth-child(3) {
+  animation: eq 1100ms 60ms steps(6, end) infinite alternate;
+}
+
+@keyframes eq {
+  from {
+    height: 3px;
+  }
+  to {
+    height: 13px;
+  }
+}
+
+.tracks tbody tr.is-current td {
+  background: linear-gradient(90deg, var(--live-faint), transparent 72%);
+  color: var(--ice);
+}
+
+.tracks tbody tr.is-current td:first-child {
+  box-shadow: inset 2px 0 0 var(--live);
+}
+
+.tracks tbody tr.is-current .title-cell {
+  color: var(--ice);
+}
+
+.empty-row {
+  cursor: default;
+}
+
+.empty-row td {
+  padding: 44px 12px;
+  color: var(--haze);
+  text-align: center;
+  white-space: normal;
+}
+
+.empty-row:hover td {
+  background: none;
+  color: var(--haze);
+}
+
+.row-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  color: var(--haze-dim);
+  font-size: 13px;
+  transition:
+    color var(--t) var(--ease),
+    background-color var(--t) var(--ease);
+}
+
+.row-btn:hover {
+  color: var(--ice);
+  background: rgb(236 233 245 / 0.08);
+}
+
+.row-btn.is-on {
+  color: var(--live);
+}
+
+/* Reference columns yield before the text they support becomes unreadable. */
+@media (max-width: 1280px) {
+  .tracks th:nth-child(6),
+  .tracks td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 1040px) {
+  .tracks th:nth-child(4),
+  .tracks td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   THE WALL â€” discovery. Shape tells you what kind of thing you are looking at.
+   ========================================================================== */
+
+.wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: clamp(18px, 2vw, 28px);
+  padding-bottom: 18px;
+}
+
+.wall-albums {
+  grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+}
+
+.wall-playlists {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.wall.is-empty,
+.ribbon.is-empty {
+  display: block;
+  padding: 72px 20px;
+  color: var(--haze);
+  text-align: center;
+}
+
+/* Only when there is nothing but a message. Once a real empty state is drawn,
+   its own node carries the words and the actions. */
+.wall.is-empty:not(:has(.empty-state))::after,
+.ribbon.is-empty::after {
+  content: attr(data-empty);
+}
+
+.wall.is-empty:has(.empty-state) {
+  padding: 0;
+  display: block;
+}
+
+/* An empty section explains itself and offers the way out. A caption alone
+   leaves the reader stuck; the button is the point. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 52px 20px;
+  border: 1px dashed var(--hair);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgb(28 28 40 / 0.5), rgb(12 12 20 / 0.35));
+  text-align: center;
+}
+
+.empty-line {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 13.5px;
+  color: var(--haze);
+  line-height: 1.6;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Idle: the plate stops shouting at an empty room. Same elements, less of
+   them, so the doorway (walls, ledger) gets the space instead.
+
+   The `:has()` is load-bearing. `.plate:has(> .plate-rail[hidden])` is
+   (0,3,0) — a `:has()` argument contributes its own specificity — so a plain
+   `body.is-idle .plate` at (0,2,1) would quietly lose and the plate would
+   never actually shrink. */
+body.is-idle .plate:has(> .plate-rail[hidden]) {
+  grid-template-columns: minmax(84px, 100px) minmax(0, 1fr);
+  gap: clamp(16px, 1.8vw, 26px);
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+body.is-idle .plate-body h2 {
+  font-size: clamp(23px, 2.3vw, 31px);
+}
+
+body.is-idle .plate-artist {
+  display: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.wall-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(150deg, var(--ink-3), var(--ink));
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.08),
+    0 16px 30px -18px rgb(0 0 0 / 0.85);
+  transition:
+    box-shadow var(--t-slow) var(--ease),
+    transform var(--t-slow) var(--ease-out);
+}
+
+.card:hover .wall-art {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.12),
+    0 26px 44px -18px rgb(0 0 0 / 0.9),
+    0 0 30px -10px var(--live-glow);
+}
+
+.card-monogram {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 600;
+  color: var(--haze);
+  background: radial-gradient(
+    120% 100% at 28% 16%,
+    hsl(var(--live-h) calc(var(--live-s) * 0.5) 34% / 0.4),
+    var(--ink)
+  );
+}
+
+.card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mist);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card:hover .card-name {
+  color: var(--ice);
+}
+
+.card-meta {
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--haze-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Artists are discs, not squares: there is no artist artwork in the schema,
+   so the card is a medallion rather than a faked sleeve. */
+.wall-artists {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.card.is-artist {
+  align-items: center;
+  text-align: center;
+}
+
+.card.is-artist .wall-art {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(
+    110% 100% at 32% 18%,
+    hsl(var(--live-h) calc(var(--live-s) * 0.55) 36% / 0.45),
+    var(--ink-1) 70%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.1),
+    inset 0 0 0 1px rgb(236 233 245 / 0.05),
+    0 16px 30px -18px rgb(0 0 0 / 0.85);
+}
+
+.card.is-artist .wall-art .card-monogram {
+  position: static;
+  background: none;
+  font-size: 42px;
+  color: var(--mist);
+}
+
+.card.is-artist .card-name,
+.card.is-artist .card-meta {
+  max-width: 100%;
+}
+
+/* A playlist is a stack: two offset plates behind the face. Once a real picture
+   is chosen it is content, so the stack ornament gets out of its way. */
+.card.is-playlist .wall-art.has-cover::before {
+  display: none;
+}
+
+.card.is-playlist .wall-art {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, var(--ink-4), var(--ink-1) 70%);
+}
+
+.card.is-playlist .wall-art::before {
+  content: "";
+  position: absolute;
+  inset: 14% 10% auto;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: rgb(236 233 245 / 0.1);
+  box-shadow: 0 -6px 0 rgb(236 233 245 / 0.055);
+}
+
+.card.is-playlist .wall-art .card-monogram {
+  position: static;
+  background: none;
+  font-size: 30px;
+  color: var(--live);
+  opacity: 0.85;
+}
+
+/* ==========================================================================
+   THE RIBBON â€” genres. Each plaque takes a stable hue from its own name, so
+   the shelf is legible by colour as well as by word.
+   ========================================================================== */
+
+.ribbon {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
+  gap: 12px;
+  padding-bottom: 18px;
+}
+
+.genre-card {
+  --gh: 40;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 104px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--hair-lit);
+  border-radius: 10px;
+  background:
+    radial-gradient(130% 120% at 14% 6%, hsl(var(--gh) 58% 44% / 0.42), transparent 64%),
+    linear-gradient(170deg, var(--ink-3), var(--ink-1));
+  text-align: left;
+  transition:
+    border-color var(--t) var(--ease),
+    transform var(--t-slow) var(--ease-out),
+    box-shadow var(--t-slow) var(--ease);
+}
+
+.genre-card:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: hsl(var(--gh) 60% 62% / 0.5);
+  box-shadow:
+    0 18px 32px -20px rgb(0 0 0 / 0.9),
+    0 0 26px -10px hsl(var(--gh) 70% 58% / 0.5);
+}
+
+.genre-card:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.genre-name {
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ice);
+}
+
+.genre-count {
+  font-size: 12px;
+  color: var(--haze);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   PLAYLISTS + HISTORY
+   ========================================================================== */
+
+.composer {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.composer input {
+  flex: 1 1 auto;
+  max-width: 320px;
+  padding: 9px 14px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 14px;
+  background: rgb(5 5 10 / 0.55);
+  color: var(--ice);
+  font-size: 13.5px;
+  user-select: text;
+}
+
+.composer input::placeholder {
+  color: var(--haze-dim);
+}
+
+.composer input:focus {
+  outline: none;
+  border-color: var(--live-hair);
+  box-shadow: 0 0 0 3px var(--live-faint);
+}
+
+.sheet {
+  margin-top: 10px;
+  padding-top: 22px;
+  border-top: 1px solid var(--hair);
+}
+
+.sheet[hidden] {
+  display: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.sheet-head h2 {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ice);
+}
+
+.sheet-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sheet-meta {
+  margin-top: 3px;
+}
+
+/* The open playlist wears its picture beside the name, the way a sleeve sits
+   next to a record label. Right-click it to clear the picture. */
+.sheet-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sheet-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(155deg, var(--ink-4), var(--ink-1) 70%);
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.08),
+    0 12px 22px -14px rgb(0 0 0 / 0.9);
+  cursor: context-menu;
+}
+
+.sheet-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sheet-cover img[hidden] {
+  display: none;
+}
+
+.cover-empty {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--live);
+  opacity: 0.85;
+}
+
+.cover-empty[hidden] {
+  display: none;
+}
+
+/* History is a reel: ordinal, sleeve, what it was, when. */
+.tape {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hair);
+}
+
+.tape-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(236 233 245 / 0.04);
+  transition: background-color var(--t) var(--ease);
+}
+
+.tape-item:hover {
+  background: rgb(236 233 245 / 0.04);
+}
+
+.tape-index {
+  width: 24px;
+  flex: none;
+  font-size: 12px;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.tape-art {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(150deg, var(--ink-3), var(--ink));
+  color: var(--haze);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tape-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tape-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ice);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tape-meta {
+  font-size: 11.5px;
+  color: var(--haze-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tape-empty {
+  padding: 56px 0;
+  color: var(--haze);
+  text-align: center;
+}
+
+/* ==========================================================================
+   SETTINGS
+   ========================================================================== */
+
+.panel {
+  padding: 22px 24px 24px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: linear-gradient(170deg, rgb(19 19 27 / 0.72), rgb(8 8 13 / 0.78));
+  box-shadow: 0 20px 44px -34px rgb(0 0 0 / 0.9);
+}
+
+.panel .sheet-head {
+  margin-bottom: 6px;
+}
+
+.panel .sheet-head h2 {
+  font-size: 19px;
+}
+
+.panel-note {
+  max-width: 66ch;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--haze);
+  line-height: 1.55;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+.field-row label,
+.field-label {
+  min-width: 68px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mist);
+}
+
+.field-row input[type="text"],
+.field-row select {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 9px 13px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 14px;
+  background: rgb(5 5 10 / 0.6);
+  color: var(--ice);
+  font-size: 13.5px;
+  user-select: text;
+}
+
+.field-row input:focus,
+.field-row select:focus {
+  outline: none;
+  border-color: var(--live-hair);
+  box-shadow: 0 0 0 3px var(--live-faint);
+}
+
+/* The live "what am I playing to" line under the device picker. */
+.device-note {
+  margin: -4px 0 16px;
+  color: var(--haze);
+}
+
+/* Dark dropdown list: WebView2 paints the popup with the OS light scheme
+   otherwise, which reads as a sheet of paper in a black room. */
+.field-row select option,
+.field-row select optgroup {
+  background: #14141d;
+  color: var(--ice);
+}
+
+.field-row select option:disabled {
+  color: var(--haze-dim);
+}
+
+.field-row select optgroup {
+  color: var(--haze);
+  font-style: normal;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: rgb(5 5 10 / 0.6);
+}
+
+.segmented button {
+  padding: 7px 17px;
+  border-radius: 7px;
+  color: var(--haze);
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    color var(--t) var(--ease),
+    background var(--t) var(--ease);
+}
+
+.segmented button:hover {
+  color: var(--ice);
+}
+
+.segmented button.is-on {
+  color: #0a0a0f;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--live-h) var(--live-s) calc(var(--live-l) + 4%)),
+    hsl(var(--live-h) calc(var(--live-s) * 0.95) calc(var(--live-l) - 10%))
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28);
+}
+
+/* The desk: the live stream, read like an instrument panel. */
+.desk {
+  margin-top: 18px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: rgb(4 4 8 / 0.5);
+  overflow: hidden;
+}
+
+.desk-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.desk-verdict .verdict-lamp {
+  margin-top: 5px;
+  width: 9px;
+  height: 9px;
+}
+
+.desk-verdict .verdict-lamp.is-pure {
+  background: var(--live);
+  box-shadow:
+    0 0 10px var(--live),
+    0 0 22px var(--live-glow);
+}
+
+.desk-verdict .verdict-lamp.is-clean {
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live-glow);
+  opacity: 0.7;
+}
+
+.desk-verdict b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ice);
+}
+
+.desk-verdict span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--haze);
+  overflow-wrap: anywhere;
+}
+
+.desk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 1px;
+  background: var(--hair);
+}
+
+.desk-cell {
+  padding: 12px 16px;
+  background: rgb(6 6 11 / 0.92);
+}
+
+.desk-cell b {
+  display: block;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ice);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.desk-cell em {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--haze-dim);
+}
+
+/* Long identifiers (endpoint ids, paths) read as a wiring list. */
+.wire {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  margin: 0;
+  border-top: 1px solid var(--hair);
+}
+
+.panel > .wire {
+  margin-top: 14px;
+  border-top: 0;
+}
+
+.wire dt,
+.wire dd {
+  padding: 9px 16px;
+  border-bottom: 1px solid rgb(236 233 245 / 0.04);
+  font-size: 12.5px;
+}
+
+.wire dt {
+  color: var(--haze-dim);
+  font-weight: 600;
+}
+
+.wire dd {
+  margin: 0;
+  color: var(--mist);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.wire dt:nth-last-of-type(1),
+.wire dd:nth-last-of-type(1) {
+  border-bottom: 0;
+}
+
+.folders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.folders li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--hair);
+  border-radius: 14px;
+  background: rgb(5 5 10 / 0.45);
+  color: var(--mist);
+}
+
+.folders li.dim {
+  color: var(--haze);
+  border-style: dashed;
+}
+
+.folders li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.folders button {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 7px;
+  color: var(--haze);
+  font-size: 12px;
+  transition:
+    color var(--t) var(--ease),
+    border-color var(--t) var(--ease);
+}
+
+.folders button:hover {
+  color: #f08c9c;
+  border-color: rgb(240 140 156 / 0.45);
+}
+
+.events {
+  max-height: 210px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--haze);
+}
+
+.events li {
+  padding: 6px 0;
+  border-bottom: 1px solid rgb(236 233 245 / 0.035);
+  overflow-wrap: anywhere;
+}
+
+.events li:last-child {
+  border-bottom: 0;
+}
+
+/* ==========================================================================
+   THE CONSOLE â€” the instrument along the bottom edge.
+   ========================================================================== */
+
+.console {
+  grid-area: console;
+  position: relative;
+  padding: 13px clamp(16px, 2vw, 26px) 15px;
+  background: linear-gradient(180deg, rgb(34 34 46 / 0.96), rgb(16 16 24 / 0.98));
+}
+
+/* The lip carries position as light: the track's progress is readable at a
+   glance without reading the clock. */
+.console-lip {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: var(--hair-lit);
+  overflow: hidden;
+}
+
+.console-lip i {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 0;
+  height: 100%;
+  background: var(--live);
+  box-shadow:
+    0 0 10px var(--live-glow),
+    0 0 22px var(--live-glow);
+  transition: width 260ms linear;
+}
+
+/* ==========================================================================
+   THE CONSOLE, ALIVE
+   Six small motions, all of them opacity, transform or colour on elements a
+   few dozen pixels across. Nothing here animates layout, nothing filters, and
+   nothing runs while the app is paused: the whole set is gated on
+   `body.is-playing`, which the transport already toggles. Stopped, the console
+   is still; playing, it breathes.
+   ========================================================================== */
+
+/* 1. The console floor carries a slow wave of light while audio moves. */
+.console::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 34%,
+    hsl(var(--live-h) calc(var(--live-s) * 0.85) 58% / 0.09) 50%,
+    transparent 66%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  opacity: 0;
+}
+
+body.is-playing .console::before {
+  animation: console-sweep 9s var(--ease) infinite;
+}
+
+@keyframes console-sweep {
+  0% {
+    opacity: 0;
+    background-position: 130% 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    background-position: -30% 0;
+  }
+}
+
+/* 2. The sleeve lifts very slightly off the panel and holds there. */
+body.is-playing .console-art {
+  animation: art-lift 5.6s var(--ease) infinite;
+}
+
+@keyframes art-lift {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      inset 0 1px 0 rgb(236 233 245 / 0.09),
+      0 8px 18px -10px rgb(0 0 0 / 0.9);
+  }
+  50% {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgb(236 233 245 / 0.09),
+      0 14px 26px -12px rgb(0 0 0 / 0.95),
+      0 0 18px -6px var(--live-glow);
+  }
+}
+
+/* 3. The play button's light ring swells and settles. */
+body.is-playing #play-pause-btn {
+  animation: play-breathe 3.2s var(--ease) infinite;
+}
+
+@keyframes play-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 var(--live-glow),
+      0 6px 18px -8px rgb(0 0 0 / 0.8);
+  }
+  50% {
+    box-shadow:
+      0 0 0 7px transparent,
+      0 8px 26px -8px var(--live-glow);
+  }
+}
+
+/* 4. The status word ticks in time with the light rather than sitting flat. */
+body.is-playing .console-state[data-state="playing"] {
+  animation: state-tick 2.4s var(--ease) infinite;
+}
+
+@keyframes state-tick {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 5. The progress lip sheds a highlight that travels along the played part. */
+@keyframes lip-sheen {
+  0% {
+    background-position: -60% 0;
+  }
+  100% {
+    background-position: 160% 0;
+  }
+}
+
+body.is-playing .console-lip i::after {
+  animation: lip-sheen 3.2s ease-in-out infinite;
+}
+
+/* 6. The device lamp lights and pulses only once a stream is actually open. */
+body.is-playing #chip-mode::before {
+  background: var(--live);
+  box-shadow: 0 0 9px var(--live);
+  animation: lamp-breathe 2.6s ease-in-out infinite;
+}
+
+.console-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* The output column is allowed to be wide: it holds a device name, and a
+     device name is the one string here that cannot be abbreviated without
+     becoming useless ("Headphones (Rockerz…"). Letting it grow means the slack
+     on a wide window lands in the monitor instead of as dead air beside it. */
+  grid-template-columns: minmax(180px, 250px) minmax(0, 1fr) minmax(230px, 380px);
+  align-items: center;
+  gap: clamp(14px, 2vw, 26px);
+}
+
+.console-now {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+
+.console-art {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 5px;
+  background: linear-gradient(150deg, var(--ink-3), var(--ink));
+  box-shadow:
+    inset 0 1px 0 rgb(236 233 245 / 0.09),
+    0 8px 18px -10px rgb(0 0 0 / 0.9);
+}
+
+.console-art-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--haze-dim);
+}
+
+.console-art-empty svg {
+  width: 22px;
+  height: 22px;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-core 4.4s var(--ease) infinite 1.1s;
+}
+
+.console-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.console-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ice);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.console-artist {
+  font-size: 12px;
+  color: var(--haze);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The status word under the title: the transport state, stated in words. */
+.console-state {
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--haze-dim);
+  white-space: nowrap;
+}
+
+.console-state[data-state="playing"] {
+  color: var(--live);
+}
+
+.console-state[data-state="paused"] {
+  color: var(--mist);
+}
+
+.console-state[data-state="error"] {
+  color: #d98a8a;
+}
+
+.console-state[data-state="loading"] {
+  color: var(--live);
+  animation: lamp-breathe 1.2s ease-in-out infinite;
+}
+
+.console-transport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tbtn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--mist);
+  transition:
+    color var(--t) var(--ease),
+    background-color var(--t) var(--ease),
+    transform var(--t) var(--ease),
+    box-shadow var(--t) var(--ease);
+}
+
+/* Repeat: struck through when off, lit when looping. The three states are
+   told apart by the glyph itself, not by a caption. */
+#repeat-btn.is-on {
+  color: var(--live);
+  filter: drop-shadow(0 0 6px var(--live-glow));
+}
+
+#repeat-btn[data-repeat="one"] {
+  color: var(--gold);
+}
+
+#repeat-off {
+  stroke: var(--haze-dim);
+}
+
+.tbtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tbtn.is-quiet {
+  color: var(--haze-dim);
+}
+
+.tbtn:hover:not(:disabled) {
+  color: var(--ice);
+  background: rgb(236 233 245 / 0.07);
+}
+
+.tbtn.is-primary {
+  width: 46px;
+  height: 46px;
+  margin-inline: 4px;
+  color: #0a0a0f;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--live-h) var(--live-s) calc(var(--live-l) + 6%)),
+    hsl(var(--live-h) calc(var(--live-s) * 0.95) calc(var(--live-l) - 12%))
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.32),
+    0 0 0 1px rgb(0 0 0 / 0.3),
+    0 6px 20px -8px var(--live-glow);
+}
+
+.tbtn.is-primary svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tbtn.is-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--live-h) var(--live-s) calc(var(--live-l) + 11%)),
+    hsl(var(--live-h) calc(var(--live-s) * 0.95) calc(var(--live-l) - 7%))
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    0 0 0 1px rgb(0 0 0 / 0.3),
+    0 12px 28px -8px var(--live-glow);
+}
+
+.tbtn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.scrub {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  max-width: 580px;
+}
+
+.time {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--haze);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ranges: a recessed trough, filled with the live light. */
+input[type="range"] {
+  --fill: 0%;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--live) 0 var(--fill),
+    rgb(236 233 245 / 0.1) var(--fill) 100%
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--ice);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 2px 6px rgb(0 0 0 / 0.7);
+  transition: transform var(--t) var(--ease);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.18);
+}
+
+input[type="range"]:disabled {
+  cursor: default;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--haze-dim);
+  transform: none;
+}
+
+.console-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* The monitor absorbs the spare width; the volume control keeps its size
+   because a slider that grows is harder to aim at. */
+.monitor {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The monitor: device, mode lamp, and the wire format. */
+.monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 13px;
+  border: 1px solid var(--hair);
+  border-radius: 14px;
+  background: rgb(5 5 10 / 0.6);
+  text-align: right;
+}
+
+.monitor-device {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mist);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monitor-sub {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--haze-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-format:empty {
+  display: none;
+}
+
+.lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--haze-dim);
+}
+
+.lamp::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(236 233 245 / 0.2);
+  transition:
+    background-color var(--t) var(--ease),
+    box-shadow var(--t) var(--ease);
+}
+
+.lamp.is-exclusive {
+  color: var(--ice);
+  border-color: var(--live-hair);
+}
+
+.lamp.is-exclusive::before {
+  background: var(--live);
+  box-shadow: 0 0 9px var(--live);
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 116px;
+  flex: none;
+}
+
+.vol-glyph {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--haze-dim);
+}
+
+/* ==========================================================================
+   ONE ARRIVAL
+   The rail and the stage settle in once, on boot. Nothing else animates on
+   its own.
+   ========================================================================== */
+
+.app.is-booting .brand,
+.app.is-booting .nav-item,
+.app.is-booting .rail-base {
+  animation: settle 520ms var(--ease-out) backwards;
+}
+
+.app.is-booting .nav-item:nth-of-type(1) { animation-delay: 40ms; }
+.app.is-booting .nav-item:nth-of-type(2) { animation-delay: 70ms; }
+.app.is-booting .nav-item:nth-of-type(3) { animation-delay: 100ms; }
+.app.is-booting .nav-item:nth-of-type(4) { animation-delay: 130ms; }
+.app.is-booting .nav-item:nth-of-type(5) { animation-delay: 160ms; }
+.app.is-booting .nav-item:nth-of-type(6) { animation-delay: 190ms; }
+.app.is-booting .nav-item:nth-of-type(7) { animation-delay: 220ms; }
+.app.is-booting .rail-base { animation-delay: 260ms; }
+
+.app.is-booting .stage {
+  animation: settle 620ms 80ms var(--ease-out) backwards;
+}
+
+.app.is-booting .console {
+  animation: rise-in 620ms 140ms var(--ease-out) backwards;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 1180px) {
+  .plate {
+    grid-template-columns: minmax(168px, 196px) minmax(0, 1fr);
+  }
+
+  .plate-rail {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    padding-top: 18px;
+    border-left: 0;
+    border-top: 1px solid var(--hair);
+  }
+
+  .more-list {
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+  }
+
+  .more-list li {
+    flex: none;
+  }
+
+  .more-item {
+    width: 178px;
+  }
+}
+
+@media (max-width: 1000px) {
+  /* Narrow, but not narrow enough to wrap. Dropping the output row onto a line
+     of its own made the console 166px tall with a two-word status marooned at
+     one end of a 900px bar - worse than simply tightening the columns. */
+  .console-inner {
+    /* The third column has to hold the monitor *and* the 116px volume slider,
+       so its floor is their sum plus the gap. Sizing it below that made the
+       monitor collapse to two words and clip its own device name. */
+    grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) minmax(212px, 240px);
+    gap: 10px;
+  }
+
+  .console-right {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app {
+    grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr);
+  }
+
+  .wordmark,
+  .nav-label,
+  .rail-meta {
+    display: none;
+  }
+
+  .brand,
+  .nav-item,
+  .rail-base {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .stage-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .stage-search {
+    width: 100%;
+  }
+
+  .plate {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plate-frame {
+    max-width: 200px;
+  }
+
+  .console-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .console-transport {
+    order: -1;
+  }
+}
+
+/* ==========================================================================
+   LIGHT MOTION â€” a few slow, cheap glows. All of it is opacity/transform on
+   small elements, so the compositor barely notices. Nothing continuous and
+   full-screen.
+   ========================================================================== */
+
+/* The output lamp breathes while audio is actually moving. */
+body.is-playing .verdict-lamp,
+body.is-playing #out-lamp {
+  animation: lamp-breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes lamp-breathe {
+  0%, 100% { opacity: 0.72; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.18); }
+}
+
+/* The sleeve's bloom behind it ebbs and flows like a candle. */
+.plate-bloom:not([hidden]) {
+  animation: bloom-breathe 7s ease-in-out infinite alternate;
+}
+
+@keyframes bloom-breathe {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
+}
+
+/* The highlight that travels along the played part of the progress lip. It is
+   declared here and only *animated* while playing, in the console block above,
+   so a stopped player does not shimmer along an empty bar. */
+.console-lip i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.35) 50%,
+    transparent 100%
+  );
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ==========================================================================
+   FIGURE PANEL â€” a portrait slot on the right of the Library for a looping
+   image. Off unless Settings enables it; empty until an image is chosen.
+   ========================================================================== */
+
+/* The rail owns its own grid column so the image runs the full height of the
+   stage â€” top of the window to the top of the console â€” with no padding,
+   no rounding and nothing of the room's showing through. */
+.figure-rail {
+  grid-area: figure;
+  position: relative;
+  width: clamp(280px, 25vw, 420px);
+  overflow: hidden;
+  background: #090910;
+  border-left: 1px solid var(--hair);
+}
+
+.figure-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.figure-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.figure-frame img[hidden] {
+  display: none;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--ice);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.switch-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--live);
+}
+
+.figure-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 12px;
+  color: var(--haze);
+}
+
+.figure-empty svg {
+  width: 56px;
+  height: 74px;
+  margin: 0 auto;
+}
+
+.figure-empty p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.figure-empty .fe-frame,
+.figure-empty .fe-head,
+.figure-empty .fe-body {
+  stroke: var(--live-hair);
+  fill: none;
+  stroke-width: 1.6;
+}
+
+/* Too narrow for a rail: the panel becomes a full-width band above the
+   console, so the image still shows without stealing the stage. */
+@media (max-width: 1080px) {
+  .app,
+  .app:has(.figure-rail[hidden]),
+  .app.is-collapsed,
+  .app.is-collapsed:has(.figure-rail[hidden]) {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr) 0;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "rail stage stage"
+      "console console console"
+      "figure figure figure";
+  }
+
+  .app.is-collapsed,
+  .app.is-collapsed:has(.figure-rail[hidden]) {
+    grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr) 0;
+  }
+
+  .figure-rail {
+    width: auto;
+    height: min(46vh, 420px);
+    border-left: 0;
+    border-top: 1px solid var(--hair);
+  }
+}
+
+/* ==========================================================================
+   THE SHORTCUT CARD
+   A quiet overlay, not a dialog with a title bar: a dimmed field, one rounded
+   card, and every binding on one screen. It fades rather than pops.
+   ========================================================================== */
+
+.shortcut-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 4 8 / 0.72);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 220ms var(--ease),
+    visibility 220ms;
+}
+
+.shortcut-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.shortcut-card {
+  width: min(560px, 100%);
+  max-height: min(78vh, 640px);
+  overflow: auto;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgb(26 26 36 / 0.98), rgb(14 14 21 / 0.99));
+  box-shadow:
+    0 40px 90px -40px rgb(0 0 0 / 0.95),
+    inset 0 1px 0 rgb(236 233 245 / 0.06);
+  transform: translateY(10px) scale(0.985);
+  transition: transform 260ms var(--ease-out);
+}
+
+.shortcut-overlay.is-open .shortcut-card {
+  transform: none;
+}
+
+.shortcut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.shortcut-head h2 {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--ice);
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 22px;
+}
+
+.shortcut-group h3 {
+  margin-bottom: 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haze-dim);
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.shortcut-row:last-child {
+  border-bottom: 0;
+}
+
+.shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.shortcut-keys kbd {
+  min-width: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 7px;
+  background: rgb(5 5 10 / 0.7);
+  color: var(--mist);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.5);
+}
+
+.shortcut-or {
+  margin: 0 3px;
+  font-size: 10.5px;
+  color: var(--haze-dim);
+}
+
+.shortcut-label {
+  font-size: 13px;
+  color: var(--ice);
+  text-align: right;
+}
+
+/* Toast notifications: success/info messages in the top-right; each fades
+   out after 3 seconds and removes itself. */
+#toast-stack {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgb(20 20 30 / 0.94);
+  border: 1px solid var(--hair);
+  color: var(--ice);
+  font-size: 12.5px;
+  box-shadow: 0 14px 30px -18px rgb(0 0 0 / 0.9);
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition:
+    opacity 280ms var(--ease),
+    transform 280ms var(--ease-out);
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.toast--success { border-left: 3px solid var(--live); }
+.toast--info { border-left: 3px solid var(--haze); }
+
+/* A failure is the one toast that must read as urgent without going loud. The
+   accent stays inside the burgundy/candle family so it never looks like a
+   system dialog dropped into the room. */
+.toast--error {
+  border-left: 3px solid #c96a72;
+  background: rgb(38 18 22 / 0.96);
+  box-shadow:
+    0 14px 30px -18px rgb(0 0 0 / 0.9),
+    0 0 0 1px rgb(201 106 114 / 0.18);
+  color: #f6e6e4;
+}
+
+/* Inline confirmation dialog: a small centered card with a dimmed field. */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 66;
+  display: grid;
+  place-items: center;
+  background: rgb(4 4 8 / 0.68);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 200ms var(--ease),
+    visibility 200ms;
+}
+
+.dialog-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dialog-card {
+  width: min(380px, calc(100% - 40px));
+  padding: 20px 22px 20px;
+  border: 1px solid var(--hair-lit);
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgb(24 24 34 / 0.98), rgb(14 14 21 / 0.99));
+  box-shadow: 0 34px 70px -36px rgb(0 0 0 / 0.95);
+}
+
+.dialog-body {
+  margin: 0 0 18px;
+  color: var(--ice);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   REDUCED MOTION â€” the room still stands, but nothing moves in it.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card:hover .wall-art,
+  .genre-card:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .tbtn.is-primary:hover:not(:disabled) {
+    transform: none;
+  }
+
+  /* With the bars frozen, give the open row a solid mark instead. */
+  .row-eq i {
+    height: 9px;
+  }
+}

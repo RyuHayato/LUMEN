@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lumen-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".devkit/preview/server.js"],
+      "port": 5173
+    }
+  ]
+}
